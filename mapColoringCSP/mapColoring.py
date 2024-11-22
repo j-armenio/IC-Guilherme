@@ -13,27 +13,29 @@ def revise(r1, r2, domains, constraints):
 
     return revised
 
-# Retorna falso se alguma incosistencia de arco é encontrada e verdadeiro caso contrario
+# Retorna falso se alguma inconsistência de arco é encontrada e verdadeiro caso contrário
 def ac_3(domains, constraints):
     queue = deque(constraints)
+    processed_arcs = set()
 
     while queue:
-        (r1, r2) = queue.popLeft()
+        (r1, r2) = queue.popleft()
 
         if revise(r1, r2, domains, constraints):
-            if not domains[regions]:
+            if not domains[r1]:
                 return False
             
-            for r in domains:
-                if r != r1 and (r, r1) in constraints:
-                    queue.append((r, r1))
+        for r in domains:
+            if r != r1 and ((r, r1) in constraints or (r1, r) in constraints) and (r, r1) not in processed_arcs:
+                queue.append((r, r1))
+                processed_arcs.add((r, r1))
 
     return True
 
 # Verifica se a 'color' em 'region' atende as restrições
 def is_consistent(region, color, assignment, constraints):
     for r1, r2 in constraints:
-        if r1 == region: # Apenas regioes da restrição atual
+        if r1 == region: # Apenas regiões da restrição atual
             if assignment[r2] == color: # Verifica se a cor da restrição é igual
                 return False
         
@@ -43,29 +45,21 @@ def is_consistent(region, color, assignment, constraints):
     return True
 
 # Backtracking sem AC-3
-def backtrack(assignment, constraints, domain): # Retorna ou a solução ou falha
+def backtrack(assignment, constraints, domains): # Retorna ou a solução ou falha
     # Base da recursão
-    has_none = 0
-    for i in assignment.values():
-        if i == None:
-            has_none = 1
-    if has_none == 0:
+    if all(value is not None for value in assignment.values()): # Verifica se todas as variáveis foram atribuídas
         return assignment
 
-    # Escolhe variavel unassigned
-    region = None
-    for r in assignment:
-        if assignment[r] == None:
-            region = r
-            break
+    # Escolhe variável não atribuída
+    region = next(r for r in assignment if assignment[r] is None)
     
     # Passo da recursão
-    for color in domain:
+    for color in domains[region]:
         if is_consistent(region, color, assignment, constraints):
             assignment[region] = color
 
             # Chamada recursiva
-            result = backtrack(assignment, constraints, domain)
+            result = backtrack(assignment, constraints, domains)
             if result:
                 return result
 
@@ -75,68 +69,89 @@ def backtrack(assignment, constraints, domain): # Retorna ou a solução ou falh
 
 # Backtracking com AC-3
 def backtrack2(assignment, constraints, domains):
-    # base da recursão
-    has_none = 0
-    for i in assignment.values():
-        if i == None:
-            has_none = 1
-    if has_none == 0:
+    # Base da recursão
+    if all(value is not None for value in assignment.values()): # Verifica se todas as variáveis foram atribuídas
         return assignment
 
-    # escolhe uma variavel
-    region = None
-    for r in assignment:
-        if assignment[r] is None:
-            region = r
-            break
+    # Escolhe uma variável
+    region = next(r for r in assignment if assignment[r] is None)
     
-    # tenta cada cor no dominio
+    # Tenta cada cor no domínio
     for color in domains[region]:
         if is_consistent(region, color, assignment, constraints):
             assignment[region] = color
 
-            # faz uma copia do dominio para backtracking
+            # Faz uma cópia do domínio para backtracking
             new_domains = {r: domains[r][:] for r in domains}
             if ac_3(new_domains, constraints):
-                result = backtrack(assignment, constraints, new_domains)
+                result = backtrack2(assignment, constraints, new_domains)
                 if result:
                     return result
 
-            # reverte a atribuição se não for arc-consistency
+            # Reverte a atribuição se não for arc-consistency
             assignment[region] = None
 
     return None
 
-# Australia
 
-regions = ['WA','NT','Q','NSW','V','SA','T']
+# =============== INPUT ===============
+
+regions = [
+    'AC', 'AM', 'RR', 'RO', 'PA', 'AP', 'TO', 
+    'MA', 'PI', 'CE', 'RN', 'PB', 'PE', 'AL', 'SE', 'BA',
+    'MT', 'MS', 'GO', 'DF', 
+    'MG', 'ES', 'RJ', 'SP',
+    'PR', 'SC', 'RS'
+]
 
 domain = ['red', 'green', 'blue']
 
 constraints = [
-    ('SA','WA'), ('SA','NT'), ('SA','Q'), ('SA','NSW'), ('SA','V'),
-    ('WA','NT'), ('NT','Q'), ('Q','NSW'), ('NSW','V')
+    ('AC', 'AM'), ('AC', 'RO'),
+    ('AM', 'RR'), ('AM', 'PA'), ('AM', 'RO'), 
+    ('RR', 'PA'), 
+    ('RO', 'MT'), ('RO', 'TO'),
+    ('PA', 'TO'), ('PA', 'MT'), ('PA', 'MA'), ('PA', 'AP'),
+    ('TO', 'MT'), ('TO', 'MA'), ('TO', 'PI'), 
+    ('MA', 'PI'), ('MA', 'PA'),
+    ('PI', 'CE'), ('PI', 'BA'), 
+    ('CE', 'RN'), ('CE', 'PB'), ('CE', 'PE'), 
+    ('RN', 'PB'), 
+    ('PB', 'PE'), 
+    ('PE', 'AL'), ('PE', 'BA'), 
+    ('AL', 'SE'), ('AL', 'BA'), 
+    ('SE', 'BA'),
+    ('BA', 'MG'), ('BA', 'GO'), ('BA', 'ES'),
+    ('MT', 'MS'), ('MT', 'GO'),
+    ('MS', 'GO'), ('MS', 'PR'),
+    ('GO', 'DF'), ('GO', 'MG'),
+    ('DF', 'GO'), 
+    ('MG', 'ES'), ('MG', 'SP'), ('MG', 'RJ'),
+    ('ES', 'RJ'),
+    ('RJ', 'SP'),
+    ('SP', 'PR'),
+    ('PR', 'SC'),
+    ('SC', 'RS')
 ]
 
 assignment = {
-    'WA': None, 'NT': None, 'SA': None,
-    'Q': None, 'NSW': None, 'V': None, 'T': None
+    'AC': None, 'AM': None, 'RR': None, 'RO': None, 'PA': None, 'AP': None, 'TO': None,
+    'MA': None, 'PI': None, 'CE': None, 'RN': None, 'PB': None, 'PE': None, 'AL': None, 'SE': None, 'BA': None,
+    'MT': None, 'MS': None, 'GO': None, 'DF': None,
+    'MG': None, 'ES': None, 'RJ': None, 'SP': None,
+    'PR': None, 'SC': None, 'RS': None
 }
 
 domains = {}
-for r in regions:
-    domains[regions] = domain[:] # cria uma cópia da lista de dominio em cada domains[regions]
+for region in regions:
+    domains[region] = domain[:] # Cria uma cópia da lista de cores
 
-# domains = 
-# {'WA': ['green', 'blue'], 
-#  'NT': ['red', 'green', 'blue'], 
-#  'SA': ['red', 'green', 'blue']}
-
+# ===== Teste com consistência de arco =====
 if ac_3(domains, constraints):
-    result = backtrack(assignment, constraints, domains)
+    result = backtrack2(assignment, constraints, domains)
     print(result)
 else:
     print("Problema inconsistente.")
 
-# Teste sem consistencia de arco
-# print(backtrack(assignment, constraints, domain))
+# ===== Teste sem consistência de arco =====
+# print(backtrack(assignment, constraints, domains))

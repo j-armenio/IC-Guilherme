@@ -69,7 +69,7 @@ Cada variável individualmente satisfaça todas as restrições unárias que se 
 
 Se houver uma restrição P(X) (uma condição que restringe os valores possíveis para X), então todos valores no domínio de X devem satisfazer P(X). Se um valor v ∈ Dom(X) não satisfaz a restrição unária, ele deve ser removido do domínio.
 
-### Arc Consistency
+### Arc Consistency (AC)
 
 Cada variável individualmente satisfaça todas as restrições binárias que se aplicam a ela.
 
@@ -85,9 +85,23 @@ Para fazer X arco-consistente com respeito a Y, reduzimos o dominio de X para {0
 Dominio inicial: X = Y = {0,1,2,3,4,5,6,7,8,9}
 Dominio após consistência de arco: X = {0,1,2,3}, Y = {0,1,4,9}
 
+### Generalized Arc Consistency (GAC)
+
+Consistência de arco para restrições não-binárias.
+
+* A melhor complexidade que pode ser encontrada para um algoritmo que aplica GAC em uma rede sem tipos de restrições é *O(erd^r)*, onde *e* é o número de restrições e *r* é a maior aridade de uma restrição e *d* é o tamanho máximo do domínio de uma variável.
+
 #### AC-3
 
 É o algoritmo mais popular que aplica consistência de arco. Ele gera uma **fila de arcos** que faz iterações sucessivas removendo valores inconsistentes até que o problema esteja arc-consistente.
+
+* Proposto para binary normalized networks e alcança a 2-consistency.
+
+* O principal componente do GAC3 é a revisão de um arco, isso é, a atualização do domínio de uma restrição.
+
+* O algoritmo principal é um loop simples que revisa todos arcos até que não ocorra nenhuma mudança, para garantir que todos dominios estão consistentes com todas restrições.
+
+* Tem tempo *O(er³d^(r+1))* e espaço *O(er)*, onde r é a maior aridade entre as restrições.
 
 1. Coloca todos arcos na fila. (Cada restrição binária se torna dois arcos, um em cada sentido);
 2. Processamento de arcos:
@@ -97,7 +111,16 @@ Dominio após consistência de arco: X = {0,1,2,3}, Y = {0,1,4,9}
     * Se o domínio de X for alterado, adicionamos todos os arcos relacionados a X de volta na fila.
 3. Repete o processo até que nenhum valor possa ser removido.
 
+pseudo:
 ```pseudo
+function REVISE(csp,Xi,Xj) returns true if we revise the domain of Xi
+    revised <- false
+    for each x in Di do
+        if no value y in Dj allows(x,y) to satisfy the constraint between Xi and Xj then
+            delete x from Di
+            revised <- true
+    return revised
+
 function AC-3(csp) returns false iff an inconsistency is found and true otherwise
     queue <- a queue of arcs, initially all the arcs in csp
 
@@ -108,18 +131,17 @@ function AC-3(csp) returns false iff an inconsistency is found and true otherwis
             for each Xk in Xi.neighbors-{Xj} do
                 add(Xk,Xi) to queue
     return true
-
-function REVISE(csp,Xi,Xj) returns true if we revise the domain of Xi
-    revised <- false
-    for each x in Di do
-        if no value y in Dj allows(x,y) to satisfy the constraint between Xi and Xj then
-            delete x from Di
-            revised <- true
-    return revised
 ```
-
+python:
 ```python
-from collections import deque
+def revise(csp, X, Y):
+    revised = False
+    for x in set(csp.dominios[X]): # Para cada valor x em X
+        if not any(csp.satisfaz(x, y) for y in csp.dominios[Y]): # Se não há y válido
+            csp.dominios[X].remove(x) # Remove x do domínio de X
+            revised = True
+    
+    return revised
 
 def ac3(csp):
     fila = deque(csp.restricoes) # Inicializa fila com todos arcos (X, Y)
@@ -136,15 +158,6 @@ def ac3(csp):
                     queue.append((Z, X))
 
     return True # CSP ficou arco-consistente
-
-def revise(csp, X, Y):
-    revised = False
-    for x in set(csp.dominios[X]): # Para cada valor x em X
-        if not any(csp.satisfaz(x, y) for y in csp.dominios[Y]): # Se não há y válido
-            csp.dominios[X].remove(x) # Remove x do domínio de X
-            revised = True
-    
-    return revised
 ```
 
 * **Complexidade**: Assuma um CSP com *n* variáveis, cada uma com um domínio de tamanho máximo *d*, e com *c* restrições binárias (arcos). Cada arco (Xk,Xi) pode ser inserido na fila apenas *d* vezes, pois Xi tem no máximo *d* valores para deletar. Pode ser feito em tempo *O(d²)*, e *O(cd³)* no tempo do pior caso.
@@ -157,4 +170,22 @@ def revise(csp, X, Y):
 
 * Grande diferença é no momento e forma como tratar restrições: o AC-3 remove valores incosistentes antes de começar a busca, enquanto o Backtracking só percebe incosistências depois de atribuir valores e testar as restrições.
 
-#### 
+##### Problema do AC3
+
+A time complexity do AC3 não é ótima. A função `Revise` não se lembra de suas computações anteriores e refaz verificações que já foram realizadas.
+
+**Ex**:
+
+* Variáveis: x,y,z
+* Restrições: c1(x,y), c2(y,z)
+* Domínios: D(x) = D(y)
+
+Considere que as revisões:
+1. Revise(x, c1): sucesso, sem alterações.
+2. Revise(y, c1): sucesso, sem alterações.
+3. Revise(y, c2): afeta o domínio de y, e como y tem restrições que afetam x, o arco (x, c1) deve ser adicionado novamente a fila.
+4. Revise(z, c2): sucesso, sem alterações.
+5. Revise(x, c1): se revisa novamente esse arco, porém, a maior parte das verificações já foram feitas anteriormente. 
+
+#### AC-4
+
